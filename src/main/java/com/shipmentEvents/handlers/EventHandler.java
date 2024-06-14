@@ -164,30 +164,30 @@ public class EventHandler implements RequestHandler<ScheduledEvent, String> {
     }
     
 
-    private void deleteProcessedFiles(Map<String, List<KeyVersion>> filesToDelete) {
-      final AmazonS3 s3Client = EventHandler.getS3Client();
-      for (Entry<String, List<KeyVersion>> entry : filesToDelete.entrySet()) {
-          final DeleteObjectsRequest deleteRequest = new DeleteObjectsRequest(entry.getKey()).withKeys(entry.getValue()).withQuiet(false);
-          s3Client.deleteObjects(deleteRequest);
-      }
-    }
-    
-    private boolean isValidFile(String fileContents) {
-        if (!fileContents.contains("\n")) {
-            return false;
+        private void deleteProcessedFiles(Map<String, List<KeyVersion>> filesToDelete) {
+          final AmazonS3 s3Client = EventHandler.getS3Client();
+          for (Entry<String, List<KeyVersion>> entry : filesToDelete.entrySet()) {
+              final DeleteObjectsRequest deleteRequest = new DeleteObjectsRequest(entry.getKey()).withKeys(entry.getValue()).withQuiet(false);
+              s3Client.deleteObjects(deleteRequest);
+          }
         }
-        String[] lines = fileContents.split("\n");
-        for (String l: lines) {
-            if (!l.contains(":")) {
+        
+        private boolean isValidFile(String fileContents) {
+            if (!fileContents.contains("\n")) {
                 return false;
             }
+            String[] lines = fileContents.split("\n");
+            for (String l: lines) {
+                if (!l.contains(":")) {
+                    return false;
+                }
+            }
+            return true;
         }
-        return true;
-    }
-    
-    public static AmazonS3 getS3Client() {
-        return AmazonS3ClientBuilder.standard().withRegion(Regions.DEFAULT_REGION).build();
-    }
+        
+        public static AmazonS3 getS3Client() {
+            return AmazonS3ClientBuilder.standard().withRegion(Regions.DEFAULT_REGION).build();
+        }
     
     
 }
