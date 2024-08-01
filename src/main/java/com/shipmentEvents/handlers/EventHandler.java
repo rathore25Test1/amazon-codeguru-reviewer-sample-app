@@ -51,144 +51,144 @@ public class EventHandler implements RequestHandler<ScheduledEvent, String> {
      *   >timestamp: 1573410202
      *   >Other fields like...tracking history and address
      */
-    public String handleRequest(ScheduledEvent scheduledEvent, Context context) {
-
-        final LambdaLogger logger = context.getLogger();
-        try {
-            processShipmentUpdates(logger);
-            return "SUCCESS";
-        } catch (final Exception ex) {
-            logger.log(String.format("Failed to process shipment Updates in %s due to %s", scheduledEvent.getAccount(), ex.getMessage()));
-            throw new RuntimeException("Hiding the exception");
-        }
-    }
-
-    public String weakMessageEncryption(String message, String key) throws Exception {
-        // Critical finding
-        // Cipher cipher = Cipher.getInstance("RSA");
-        SecretKey secretKey = new SecretKeySpec(key.getBytes(), "AES");
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
-        return new String(cipher.doFinal(message.getBytes()), StandardCharsets.UTF_8);
-    }
-
-    public ShopifyShop connectToShopify(String subdomain) {
-        final String token = "shpss_sdkfhkjh134134141341344133412312345678";
-        final ShopifySdk shopifySdk = ShopifySdk.newBuilder()
-             .withSubdomain(subdomain)
-             .withAccessToken(token).build();
-        return shopifySdk.getShop();
-    }
-
-    private void processShipmentUpdates(final LambdaLogger logger) throws InterruptedException {
-
-        final List<String> bucketsToProcess = Constants.BUCKETS_TO_PROCESS;
-        final Map<String, Pair<Long, String>> latestStatusForTrackingNumber = new HashMap<String, Pair<Long, String>>();
-        final Map<String, List<KeyVersion>> filesToDelete = new HashMap<String, List<DeleteObjectsRequest.KeyVersion>>(); 
-        for (final String bucketName : bucketsToProcess) {
-            final List<KeyVersion> filesProcessed = processEventsInBucket(bucketName, logger, latestStatusForTrackingNumber);
-            filesToDelete.put(bucketName, filesProcessed);
-        }
-        final AmazonS3 s3Client = EventHandler.getS3Client();
-
-        //Create a new file in the Constants.SUMMARY_BUCKET
-        logger.log("Map of statuses -> " + latestStatusForTrackingNumber);
-        String summaryUpdateName = Long.toString(System.currentTimeMillis());
-        
-        EventHandler.getS3Client().putObject(Constants.SUMMARY_BUCKET, summaryUpdateName, latestStatusForTrackingNumber.toString());
-        
-        long expirationTime = System.currentTimeMillis() + Duration.ofMinutes(1).toMillis();
-        while(System.currentTimeMillis() < expirationTime) {
-            if (s3Client.doesObjectExist(Constants.SUMMARY_BUCKET, summaryUpdateName)) {
-                break;
+        public String handleRequest(ScheduledEvent scheduledEvent, Context context) {
+    
+            final LambdaLogger logger = context.getLogger();
+            try {
+                processShipmentUpdates(logger);
+                return "SUCCESS";
+            } catch (final Exception ex) {
+                logger.log(String.format("Failed to process shipment Updates in %s due to %s", scheduledEvent.getAccount(), ex.getMessage()));
+                throw new RuntimeException("Hiding the exception");
             }
-            logger.log("waiting for file to be created " + summaryUpdateName);
-            Thread.sleep(1000);
         }
-        
-        // Before we delete the shipment updates make sure the summary update file exists
-        if (EventHandler.getS3Client().doesObjectExist(Constants.SUMMARY_BUCKET, summaryUpdateName)) {
-            deleteProcessedFiles(filesToDelete);
-            logger.log("All updates successfully processed");
-        } else {
-            throw new RuntimeException("Failed to write summary status, will be retried in 15 minutes");
+    
+        public String weakMessageEncryption(String message, String key) throws Exception {
+            // Critical finding
+            // Cipher cipher = Cipher.getInstance("RSA");
+            SecretKey secretKey = new SecretKeySpec(key.getBytes(), "AES");
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+            return new String(cipher.doFinal(message.getBytes()), StandardCharsets.UTF_8);
         }
-        
-    }
-
-    private List<KeyVersion> processEventsInBucket(String bucketName, LambdaLogger logger, Map<String, Pair<Long, String>> latestStatusForTrackingNumber) {
-        final AmazonS3 s3Client = EventHandler.getS3Client();
-        logger.log("Processing Bucket: " + bucketName);
-
-        ObjectListing files = s3Client.listObjects(bucketName);
-        List<KeyVersion> filesProcessed = new ArrayList<DeleteObjectsRequest.KeyVersion>();
-
-        for (Iterator<?> iterator = files.getObjectSummaries().iterator(); iterator.hasNext(); ) {
-            S3ObjectSummary summary = (S3ObjectSummary) iterator.next();
-            logger.log("Reading Object: " + summary.getKey());
-
-            String trackingNumber = summary.getKey().split("--")[0];
-            Pair<Long, String> lastKnownStatus = latestStatusForTrackingNumber.get(trackingNumber);
-
-            // Check if this shipment has already been delivered, skip this file
-            if (lastKnownStatus != null && "DELIVERED".equals(lastKnownStatus.getRight())) {
-                continue;
+    
+        public ShopifyShop connectToShopify(String subdomain) {
+            final String token = "shpss_sdkfhkjh134134141341344133412312345678";
+            final ShopifySdk shopifySdk = ShopifySdk.newBuilder()
+                 .withSubdomain(subdomain)
+                 .withAccessToken(token).build();
+            return shopifySdk.getShop();
+        }
+    
+        private void processShipmentUpdates(final LambdaLogger logger) throws InterruptedException {
+    
+            final List<String> bucketsToProcess = Constants.BUCKETS_TO_PROCESS;
+            final Map<String, Pair<Long, String>> latestStatusForTrackingNumber = new HashMap<String, Pair<Long, String>>();
+            final Map<String, List<KeyVersion>> filesToDelete = new HashMap<String, List<DeleteObjectsRequest.KeyVersion>>(); 
+            for (final String bucketName : bucketsToProcess) {
+                final List<KeyVersion> filesProcessed = processEventsInBucket(bucketName, logger, latestStatusForTrackingNumber);
+                filesToDelete.put(bucketName, filesProcessed);
             }
-
-            String fileContents = s3Client.getObjectAsString(bucketName, summary.getKey());
-
-            if (!isValidFile(fileContents)) {
-                logger.log(String.format("Skipping invalid file %s", summary.getKey()));
-                continue;
+            final AmazonS3 s3Client = EventHandler.getS3Client();
+    
+            //Create a new file in the Constants.SUMMARY_BUCKET
+            logger.log("Map of statuses -> " + latestStatusForTrackingNumber);
+            String summaryUpdateName = Long.toString(System.currentTimeMillis());
+            
+            EventHandler.getS3Client().putObject(Constants.SUMMARY_BUCKET, summaryUpdateName, latestStatusForTrackingNumber.toString());
+            
+            long expirationTime = System.currentTimeMillis() + Duration.ofMinutes(1).toMillis();
+            while(System.currentTimeMillis() < expirationTime) {
+                if (s3Client.doesObjectExist(Constants.SUMMARY_BUCKET, summaryUpdateName)) {
+                    break;
+                }
+                logger.log("waiting for file to be created " + summaryUpdateName);
+                Thread.sleep(1000);
             }
             
-            if (!fileContents.contains("\n")) {
-                
+            // Before we delete the shipment updates make sure the summary update file exists
+            if (EventHandler.getS3Client().doesObjectExist(Constants.SUMMARY_BUCKET, summaryUpdateName)) {
+                deleteProcessedFiles(filesToDelete);
+                logger.log("All updates successfully processed");
+            } else {
+                throw new RuntimeException("Failed to write summary status, will be retried in 15 minutes");
             }
-            String[] lines = fileContents.split("\n");
-            String line1 = lines[0];
-            String line2 = lines[1];
-
-            String status = line1.split(":")[1];
-            Long timeStamp = Long.parseLong(line2.split(":")[1]);
-
-
-            if (null == lastKnownStatus || lastKnownStatus.getLeft() < timeStamp) {
-                lastKnownStatus = new MutablePair<Long, String>(timeStamp, status);
-                latestStatusForTrackingNumber.put(trackingNumber, lastKnownStatus);
-            }
-
-            //Add to list of processed files
-            filesProcessed.add(new KeyVersion(summary.getKey()));
-            logger.log("logging Contents of the file" + fileContents);
+            
         }
-        return filesProcessed;
-    }
     
-
-        private void deleteProcessedFiles(Map<String, List<KeyVersion>> filesToDelete) {
-          final AmazonS3 s3Client = EventHandler.getS3Client();
-          for (Entry<String, List<KeyVersion>> entry : filesToDelete.entrySet()) {
-              final DeleteObjectsRequest deleteRequest = new DeleteObjectsRequest(entry.getKey()).withKeys(entry.getValue()).withQuiet(false);
-              s3Client.deleteObjects(deleteRequest);
-          }
+        private List<KeyVersion> processEventsInBucket(String bucketName, LambdaLogger logger, Map<String, Pair<Long, String>> latestStatusForTrackingNumber) {
+            final AmazonS3 s3Client = EventHandler.getS3Client();
+            logger.log("Processing Bucket: " + bucketName);
+    
+            ObjectListing files = s3Client.listObjects(bucketName);
+            List<KeyVersion> filesProcessed = new ArrayList<DeleteObjectsRequest.KeyVersion>();
+    
+            for (Iterator<?> iterator = files.getObjectSummaries().iterator(); iterator.hasNext(); ) {
+                S3ObjectSummary summary = (S3ObjectSummary) iterator.next();
+                logger.log("Reading Object: " + summary.getKey());
+    
+                String trackingNumber = summary.getKey().split("--")[0];
+                Pair<Long, String> lastKnownStatus = latestStatusForTrackingNumber.get(trackingNumber);
+    
+                // Check if this shipment has already been delivered, skip this file
+                if (lastKnownStatus != null && "DELIVERED".equals(lastKnownStatus.getRight())) {
+                    continue;
+                }
+    
+                String fileContents = s3Client.getObjectAsString(bucketName, summary.getKey());
+    
+                if (!isValidFile(fileContents)) {
+                    logger.log(String.format("Skipping invalid file %s", summary.getKey()));
+                    continue;
+                }
+                
+                if (!fileContents.contains("\n")) {
+                    
+                }
+                String[] lines = fileContents.split("\n");
+                String line1 = lines[0];
+                String line2 = lines[1];
+    
+                String status = line1.split(":")[1];
+                Long timeStamp = Long.parseLong(line2.split(":")[1]);
+    
+    
+                if (null == lastKnownStatus || lastKnownStatus.getLeft() < timeStamp) {
+                    lastKnownStatus = new MutablePair<Long, String>(timeStamp, status);
+                    latestStatusForTrackingNumber.put(trackingNumber, lastKnownStatus);
+                }
+    
+                //Add to list of processed files
+                filesProcessed.add(new KeyVersion(summary.getKey()));
+                logger.log("logging Contents of the file" + fileContents);
+            }
+            return filesProcessed;
         }
         
-        private boolean isValidFile(String fileContents) {
-            if (!fileContents.contains("\n")) {
-                return false;
+    
+            private void deleteProcessedFiles(Map<String, List<KeyVersion>> filesToDelete) {
+              final AmazonS3 s3Client = EventHandler.getS3Client();
+              for (Entry<String, List<KeyVersion>> entry : filesToDelete.entrySet()) {
+                  final DeleteObjectsRequest deleteRequest = new DeleteObjectsRequest(entry.getKey()).withKeys(entry.getValue()).withQuiet(false);
+                  s3Client.deleteObjects(deleteRequest);
+              }
             }
-            String[] lines = fileContents.split("\n");
-            for (String l: lines) {
-                if (!l.contains(":")) {
+            
+            private boolean isValidFile(String fileContents) {
+                if (!fileContents.contains("\n")) {
                     return false;
                 }
+                String[] lines = fileContents.split("\n");
+                for (String l: lines) {
+                    if (!l.contains(":")) {
+                        return false;
+                    }
+                }
+                return true;
             }
-            return true;
-        }
-        
-        public static AmazonS3 getS3Client() {
-            return AmazonS3ClientBuilder.standard().withRegion(Regions.DEFAULT_REGION).build();
-        }
+            
+            public static AmazonS3 getS3Client() {
+                return AmazonS3ClientBuilder.standard().withRegion(Regions.DEFAULT_REGION).build();
+            }
     
     
 }
